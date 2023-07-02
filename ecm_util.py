@@ -104,19 +104,21 @@ class EasyContextMenu():
     @staticmethod
     def __delete_registry_tree(root_key, sub_key):
         try:
-            hkey = winreg.OpenKey(root_key, sub_key, access=winreg.KEY_ALL_ACCESS)
+            # del subkey in subkey
+            with winreg.OpenKey(root_key, sub_key, access=winreg.KEY_ALL_ACCESS) as hkey:
+                while True:
+                    try:
+                        subsubkey = winreg.EnumKey(hkey, 0)
+                    except OSError:
+                        # no more subkeys
+                        break
+                    EasyContextMenu.__delete_registry_tree(hkey, subsubkey)
+
+            # del subkey
+            winreg.DeleteKey(root_key, sub_key)
         except OSError:
             # subkey does not exist
             return
-        while True:
-            try:
-                subsubkey = winreg.EnumKey(hkey, 0)
-            except OSError:
-                # no more subkeys
-                break
-            EasyContextMenu.__delete_registry_tree(hkey, subsubkey)
-        winreg.CloseKey(hkey)
-        winreg.DeleteKey(root_key, sub_key)
 
     @staticmethod
     def __query_registry(reg_path):
