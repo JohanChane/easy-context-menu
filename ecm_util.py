@@ -1,4 +1,4 @@
-import configparser
+import os, subprocess, configparser
 from enum import Enum
 import winreg
 
@@ -19,6 +19,7 @@ def str_menu_type(menu_type):
 
 class EasyContextMenu():
     def __init__(self, cfg_path):
+        self.__cfg_path = cfg_path
         config = configparser.ConfigParser()
         config.read(cfg_path)
         self.__pragram_path = config.get("main", "program_path", fallback=None)
@@ -50,15 +51,28 @@ class EasyContextMenu():
             self.del_the_context_menu(m)
             menus.append(m)
         return menus
+    
+    def query_context_menu_registrys(self):
+        for m in self.__get_enable_menu():
+            self.__query_registry(f'HKEY_CLASSES_ROOT\\{self.__get_sub_key_path(m)}')
 
+    def export_context_menu_registrys(self, out_dir):
+        cfg_name = os.path.basename(self.__cfg_path).split(".")[0]
+        for m in self.__get_enable_menu():
+            out_reg_path = os.path.join(out_dir, cfg_name, f'{str_menu_type(m)}.reg')
+            out_reg_dir = os.path.dirname(out_reg_path)
+            if not os.path.exists(out_reg_dir):
+                os.makedirs(out_reg_dir, exist_ok=True)
+            self.__export_registry(f'HKEY_CLASSES_ROOT\\{self.__get_sub_key_path(m)}', out_reg_path)
+        
     def add_the_context_menu(self, menu_type):
-        sub_key = self.__get_sub_key(menu_type)
-        with winreg.CreateKey(winreg.HKEY_CLASSES_ROOT, sub_key) as key:
+        sub_key_path = self.__get_sub_key_path(menu_type)
+        with winreg.CreateKey(winreg.HKEY_CLASSES_ROOT, sub_key_path) as key:
             winreg.SetValueEx(key, "", 0, winreg.REG_SZ, self.__menu_name)
             if self.__menu_icon_path:
                 winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, self.__menu_icon_path)
 
-        with winreg.CreateKey(winreg.HKEY_CLASSES_ROOT, sub_key + '\\command') as key:
+        with winreg.CreateKey(winreg.HKEY_CLASSES_ROOT, sub_key_path + '\\command') as key:
             menu_command = r"{}".format(self.__pragram_path)
             if self.__menu_info[menu_type]["param"]:
                 menu_command += r" {}".format(self.__menu_info[menu_type]["param"])
@@ -66,17 +80,31 @@ class EasyContextMenu():
             winreg.SetValueEx(key, "", 0, winreg.REG_SZ, menu_command)
             
         if self.__menu_info[menu_type]["is_extended"]:
-            with winreg.CreateKey(winreg.HKEY_CLASSES_ROOT, sub_key) as key:
+            with winreg.CreateKey(winreg.HKEY_CLASSES_ROOT, sub_key_path) as key:
                 winreg.SetValueEx(key, "Extended", 0, winreg.REG_SZ, "")
 
     def del_the_context_menu(self, menu_type):
-        sub_key = self.__get_sub_key(menu_type)
-        self.__delete_registry_tree(winreg.HKEY_CLASSES_ROOT, sub_key)
-
+        sub_key_path = self.__get_sub_key_path(menu_type)
+        self.__delete_registry_tree(winreg.HKEY_CLASSES_ROOT, sub_key_path)
+    
+    def __get_sub_key_path(self, menu_type):
+        if menu_type == MenuType.ON_FILE:
+            sub_key_path = "*\\shell\\" + self.__sub_key_name
+        elif menu_type == MenuType.ON_DIR:
+            sub_key_path = "Directory\\shell\\" + self.__sub_key_name
+        elif menu_type == MenuType.ON_DIR_BG:
+            sub_key_path = "Directory\\Background\\shell\\" + self.__sub_key_name
+        else:
+            sub_key_path = None
+            
+        return sub_key_path
+    def __get_enable_menu(self):
+        return [k for k, v in self.__menu_info.items() if v["enable"]]
+    
     @staticmethod
-    def __delete_registry_tree(root, sub_key):
+    def __delete_registry_tree(root_key, sub_key):
         try:
-            hkey = winreg.OpenKey(root, sub_key, access=winreg.KEY_ALL_ACCESS)
+            hkey = winreg.OpenKey(root_key, sub_key, access=winreg.KEY_ALL_ACCESS)
         except OSError:
             # subkey does not exist
             return
@@ -88,18 +116,17 @@ class EasyContextMenu():
                 break
             EasyContextMenu.__delete_registry_tree(hkey, subsubkey)
         winreg.CloseKey(hkey)
-        winreg.DeleteKey(root, sub_key)
+        winreg.DeleteKey(root_key, sub_key)
 
-    def __get_sub_key(self, menu_type):
-        if menu_type == MenuType.ON_FILE:
-            sub_key = "*\\shell\\" + self.__sub_key_name
-        elif menu_type == MenuType.ON_DIR:
-            sub_key = "Directory\\shell\\" + self.__sub_key_name
-        elif menu_type == MenuType.ON_DIR_BG:
-            sub_key = "Directory\\Background\\shell\\" + self.__sub_key_name
-        else:
-            sub_key = None
-            
-        return sub_key
-    def __get_enable_menu(self):
-        return [k for k, v in self.__menu_info.items() if v["enable"]]
+    @staticmethod
+    def __query_registry(reg_path):
+        try:
+            subprocess.run(['reg', 'query', reg_path, "/s"], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error: {e}")
+
+    @staticmethod
+    def __export_registry(reg_path, output_file_path):
+        command = ['reg', 'export', reg_path, output_file_path]
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        return result.stdout

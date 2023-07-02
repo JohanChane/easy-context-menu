@@ -25,7 +25,7 @@ def get_file_names(dir):
     return file_nams
     
 def main():
-    options = ["add", "del", "restart", "exit"]
+    options = ["add", "del", "query", "export", "restart", "exit"]
     while True:
         print()
         choice = select(options)
@@ -45,7 +45,7 @@ def main():
             print("Added menus:")
             [print(f'-   {str_menu_type(i)}') for i in added_menus]
 
-        if choiced_option == "del":
+        elif choiced_option == "del":
             cfg_names = get_file_names(CFG_DIR)
             index = select(cfg_names)
             if index >= len(cfg_names):
@@ -56,7 +56,26 @@ def main():
             deled_menus = easy_context_menu.del_context_menus()
             print("Deled menus:")
             [print(f'-   {str_menu_type(i)}') for i in deled_menus]
-
+        elif choiced_option == "query":
+            cfg_names = get_file_names(CFG_DIR)
+            index = select(cfg_names)
+            if index >= len(cfg_names):
+                print("backward")
+                continue
+            cfg_path = os.path.join(CFG_DIR, cfg_names[index])
+            easy_context_menu = EasyContextMenu(cfg_path)
+            easy_context_menu.query_context_menu_registrys()
+        elif choiced_option == "export":
+            cfg_names = get_file_names(CFG_DIR)
+            index = select(cfg_names)
+            if index >= len(cfg_names):
+                print("backward")
+                continue
+            cfg_path = os.path.join(CFG_DIR, cfg_names[index])
+            easy_context_menu = EasyContextMenu(cfg_path)
+            out_dir = os.path.join(SCRIPT_PATH, "out")
+            easy_context_menu.export_context_menu_registrys(out_dir)
+            
         elif choiced_option == "restart":
             exec = sys.executable
             os.execl(exec, exec, * sys.argv)

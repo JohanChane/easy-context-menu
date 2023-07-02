@@ -57,3 +57,5 @@ Options:
 
 -   add: Add the context menu
 -   del: Remove the context menu
+-   query: Query the registry for the context menu.
+-   export: Export the registry for the context menu to the "out" directory.

@@ -55,3 +55,5 @@ Options:
 
 -   add: 添加右键菜单
 -   del: 删除右键菜单
+-   query: 查询右键菜单的注册表
+-   export: 导出右键菜单的注册表到 out 目录
