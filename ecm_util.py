@@ -1,4 +1,4 @@
-import os, subprocess, configparser
+import os, subprocess, configparser, tempfile
 from enum import Enum
 import winreg
 
@@ -58,12 +58,21 @@ class EasyContextMenu():
 
     def export_context_menu_registrys(self, out_dir):
         cfg_name = os.path.basename(self.__cfg_path).split(".")[0]
-        for m in self.__get_enable_menu():
-            out_reg_path = os.path.join(out_dir, cfg_name, f'{str_menu_type(m)}.reg')
-            out_reg_dir = os.path.dirname(out_reg_path)
-            if not os.path.exists(out_reg_dir):
-                os.makedirs(out_reg_dir, exist_ok=True)
-            self.__export_registry(f'HKEY_CLASSES_ROOT\\{self.__get_sub_key_path(m)}', out_reg_path)
+        out_reg_path = os.path.join(out_dir, cfg_name + ".reg")
+        out_reg_dir = os.path.dirname(out_reg_path)
+        if not os.path.exists(out_reg_dir):
+            os.makedirs(out_reg_dir, exist_ok=True)
+
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        temp_file_path = temp_file.name
+        temp_file.close()
+        with open(out_reg_path, "w") as f:
+            for m in self.__get_enable_menu():
+                self.__export_registry(f'HKEY_CLASSES_ROOT\\{self.__get_sub_key_path(m)}', temp_file_path, True)
+                with open(temp_file_path, "r", encoding="utf-16") as tf:
+                    f.write(tf.read())
+        os.remove(temp_file_path)
+        print(f'Export to the file: {out_reg_path}')
         
     def add_the_context_menu(self, menu_type):
         sub_key_path = self.__get_sub_key_path(menu_type)
@@ -128,7 +137,9 @@ class EasyContextMenu():
             print(f"Error: {e}")
 
     @staticmethod
-    def __export_registry(reg_path, output_file_path):
+    def __export_registry(reg_path, output_file_path, force=False):
         command = ['reg', 'export', reg_path, output_file_path]
+        if force:
+            command.append("/y")
         result = subprocess.run(command, capture_output=True, text=True, check=True)
         return result.stdout
